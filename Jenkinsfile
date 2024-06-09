@@ -9,13 +9,15 @@ pipeline {
     }
 
     stages {
-                stage('Initialize') {
+  stage('Initialize') {
             steps {
                 script {
-                    // Capture the SHA of the commit that triggered the build
-                    def prCommitSHA = env.GIT_COMMIT
-                    echo "PR Commit SHA: ${prCommitSHA}"
-                    env.PR_COMMIT_SHA = prCommitSHA
+                    // Fetch the PR commit SHA before the merge
+                    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        def prCommitSHA = sh(script: "git ls-remote https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git refs/pull/${env.CHANGE_ID}/head | cut -f1", returnStdout: true).trim()
+                        echo "PR Commit SHA: ${prCommitSHA}"
+                        env.PR_COMMIT_SHA = prCommitSHA
+                    }
                 }
             }
         }
