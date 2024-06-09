@@ -9,33 +9,40 @@ pipeline {
     }
 
     stages {
-  stage('Initialize') {
-            steps {
-                script {
-                    // Fetch the PR commit SHA before the merge
-                    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
-                        def prCommitSHA = sh(script: "git ls-remote https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git refs/pull/${env.CHANGE_ID}/head | cut -f1", returnStdout: true).trim()
-                        echo "PR Commit SHA: ${prCommitSHA}"
-                        env.PR_COMMIT_SHA = prCommitSHA
-                    }
-                }
+stage('Checkout') {
+    steps {
+        script {
+            echo 'Checking out the repository...'
+            try {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: 'refs/pull/' + env.CHANGE_ID + '/head']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/' + env.GITHUB_REPO_OWNER + '/' + env.GITHUB_REPO_NAME + '.git',
+                        credentialsId: env.GITHUB_CREDENTIALS_ID
+                    ]]
+                ])
+            } catch (Exception e) {
+                echo "Checkout failed: ${e.message}"
+                currentBuild.result = 'FAILURE'
+                throw e
             }
         }
+    }
+}
 
-        stage('Checkout') {
-            steps {
-                script {
-                    echo 'Checking out the repository...'
-                    try {
-                        checkout scm
-                    } catch (Exception e) {
-                        echo "Checkout failed: ${e.message}"
-                        currentBuild.result = 'FAILURE'
-                        throw e
-                    }
-                }
-            }
+stage('Capture SHA') {
+    steps {
+        script {
+            // Capture the SHA of the PR commit
+            def prCommitSHA = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
+            echo "PR Commit SHA: ${prCommitSHA}"
+            env.PR_COMMIT_SHA = prCommitSHA
         }
+    }
+}
 
         stage('Fetch Base Branch') {
             steps {
