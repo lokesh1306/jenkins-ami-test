@@ -7,9 +7,6 @@ packer {
   }
 }
 
-variable "DH_TOKEN" {
-  default = ""
-}
 variable "GH_USERNAME" {
   default = ""
 }
