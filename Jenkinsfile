@@ -21,23 +21,24 @@ pipeline {
             }
         }
 
-        stage('Checkout') {
-            steps {
-                script {
-                    echo 'Checking out the repository...'
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: "refs/heads/${env.CHANGE_TARGET}"]],
-                        doGenerateSubmoduleConfigurations: false,
-                        extensions: [[$class: 'PreBuildMerge', options: [mergeRemote: 'origin', mergeTarget: env.CHANGE_TARGET]]],
-                        userRemoteConfigs: [[
-                            url: "https://github.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}.git",
-                            credentialsId: env.GITHUB_CREDENTIALS_ID
-                        ]]
-                    ])
-                }
-            }
+stage('Checkout') {
+    steps {
+        script {
+            echo 'Checking out the repository...'
+            checkout([
+                $class: 'GitSCM',
+                branches: [[name: "refs/pull/${env.CHANGE_ID}/head"]],
+                doGenerateSubmoduleConfigurations: false,
+                extensions: [],
+                userRemoteConfigs: [[
+                    url: "https://github.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}.git",
+                    credentialsId: env.GITHUB_CREDENTIALS_ID
+                ]]
+            ])
         }
+    }
+}
+
 
         stage('Fetch Base Branch') {
             steps {
@@ -86,42 +87,42 @@ pipeline {
                 }
             }
         }
+stage('Check Conventional Commits') {
+    steps {
+        script {
+            echo 'Checking Conventional Commits...'
+            withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                // Fetch the PR branch and base branch to ensure we have the latest changes
+                sh """
+                    git fetch https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}
+                    git fetch https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git +refs/heads/${env.CHANGE_TARGET}:refs/remotes/origin/${env.CHANGE_TARGET}
+                """
 
-        stage('Check Conventional Commits') {
-            steps {
-                script {
-                    echo 'Checking Conventional Commits...'
-                    withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
-                        // Fetch the PR branch to ensure we have the latest changes
-                        sh """
-                            git fetch https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}
-                        """
-                    }
-
-                    // Log the commits between the PR and the base branch
-                    def commits = sh(script: "git log --pretty=format:'%s' origin/PR-${env.CHANGE_ID}..origin/${env.CHANGE_TARGET}", returnStdout: true).trim().split('\n')
-                    if (commits.size() == 1 && commits[0].isEmpty()) {
-                        echo 'No new commits to check.'
-                    } else {
-                        echo "Commits to be checked: ${commits}"
-                        def hasErrors = false
-                        commits.each { commit ->
-                            def result = sh(script: "echo '${commit}' | commitlint --config /tmp/commitlint-config/commitlint.config.js", returnStatus: true)
-                            if (result != 0) {
-                                echo "Commit message failed: ${commit}"
-                                hasErrors = true
-                            }
-                        }
-                        if (hasErrors) {
-                            updateGitHubStatus('conventional-commits', 'failure', 'Conventional Commits check failed', env.PR_COMMIT_SHA)
-                            error('Conventional Commits check failed!')
+                // Log the commits in the PR branch that are not in the base branch
+                def commits = sh(script: "git log --pretty=format:'%s' origin/${env.CHANGE_TARGET}..origin/PR-${env.CHANGE_ID}", returnStdout: true).trim().split('\n')
+                if (commits.size() == 1 && commits[0].isEmpty()) {
+                    echo 'No new commits to check.'
+                } else {
+                    echo "Commits to be checked: ${commits}"
+                    def hasErrors = false
+                    commits.each { commit ->
+                        def result = sh(script: "echo '${commit}' | commitlint --config /tmp/commitlint-config/commitlint.config.js", returnStatus: true)
+                        if (result != 0) {
+                            echo "Commit message failed: ${commit}"
+                            hasErrors = true
                         }
                     }
-                    updateGitHubStatus('conventional-commits', 'success', 'Conventional Commits check passed', env.PR_COMMIT_SHA)
+                    if (hasErrors) {
+                        updateGitHubStatus('conventional-commits', 'failure', 'Conventional Commits check failed', env.PR_COMMIT_SHA)
+                        error('Conventional Commits check failed!')
+                    }
                 }
+                updateGitHubStatus('conventional-commits', 'success', 'Conventional Commits check passed', env.PR_COMMIT_SHA)
             }
         }
     }
+}
+
 
     post {
         always {
