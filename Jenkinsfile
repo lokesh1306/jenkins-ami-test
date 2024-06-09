@@ -7,7 +7,6 @@ pipeline {
         GITHUB_REPO_NAME = 'test-jenkins'
         GITHUB_API_URL = 'https://api.github.com/repos'
     }
-
     stages {
         stage('Initialize') {
             steps {
@@ -92,8 +91,12 @@ pipeline {
             steps {
                 script {
                     echo 'Checking Conventional Commits...'
-                    // Fetch the PR branch and base branch to ensure we have the latest changes
-                    sh "git fetch origin +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}"
+                    withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        // Fetch the PR branch to ensure we have the latest changes
+                        sh """
+                            git fetch https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}
+                        """
+                    }
 
                     // Log the commits between the PR and the base branch
                     def commits = sh(script: "git log --pretty=format:'%s' origin/PR-${env.CHANGE_ID}..origin/${env.CHANGE_TARGET}", returnStdout: true).trim().split('\n')
