@@ -13,7 +13,7 @@ pipeline {
             steps {
                 script {
                     // Fetch the PR commit SHA before the merge
-                    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                    withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         def prCommitSHA = sh(script: "git ls-remote https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git refs/pull/${env.CHANGE_ID}/head | cut -f1", returnStdout: true).trim()
                         echo "PR Commit SHA: ${prCommitSHA}"
                         env.PR_COMMIT_SHA = prCommitSHA
@@ -28,11 +28,11 @@ pipeline {
                     echo 'Checking out the repository...'
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: 'refs/heads/' + env.CHANGE_TARGET]],
+                        branches: [[name: "refs/heads/${env.CHANGE_TARGET}"]],
                         doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'PreBuildMerge', options: [mergeRemote: 'origin', mergeTarget: env.CHANGE_TARGET]]],
                         userRemoteConfigs: [[
-                            url: 'https://github.com/' + env.GITHUB_REPO_OWNER + '/' + env.GITHUB_REPO_NAME + '.git',
+                            url: "https://github.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}.git",
                             credentialsId: env.GITHUB_CREDENTIALS_ID
                         ]]
                     ])
@@ -44,7 +44,7 @@ pipeline {
             steps {
                 script {
                     echo 'Fetching base branch from original repository...'
-                    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                    withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         sh '''
                             git remote add upstream https://$GITHUB_USERNAME:$GITHUB_TOKEN@github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME.git || true
                             git fetch upstream main
@@ -59,10 +59,7 @@ pipeline {
                 script {
                     echo 'Running Packer validate...'
                     try {
-                        def result = sh(
-                            script: 'packer validate ami.pkr.hcl',
-                            returnStatus: true
-                        )
+                        def result = sh(script: 'packer validate ami.pkr.hcl', returnStatus: true)
                         if (result != 0) {
                             updateGitHubStatus('packer-validate', 'failure', 'Packer Validate check failed', env.PR_COMMIT_SHA)
                             error('Packer validate check failed!')
@@ -96,22 +93,17 @@ pipeline {
                 script {
                     echo 'Checking Conventional Commits...'
                     // Fetch the PR branch and base branch to ensure we have the latest changes
-                    sh 'git fetch origin +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}'
+                    sh "git fetch origin +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}"
 
                     // Log the commits between the PR and the base branch
-                    def commits = sh(script: 'git log --pretty=format:"%s" origin/PR-${env.CHANGE_ID}..origin/${env.CHANGE_TARGET}', returnStdout: true).trim().split('\n')
+                    def commits = sh(script: "git log --pretty=format:'%s' origin/PR-${env.CHANGE_ID}..origin/${env.CHANGE_TARGET}", returnStdout: true).trim().split('\n')
                     if (commits.size() == 1 && commits[0].isEmpty()) {
                         echo 'No new commits to check.'
                     } else {
                         echo "Commits to be checked: ${commits}"
                         def hasErrors = false
                         commits.each { commit ->
-                            def result = sh(
-                                script: """
-                                    echo "${commit}" | commitlint --config /tmp/commitlint-config/commitlint.config.js
-                                """,
-                                returnStatus: true
-                            )
+                            def result = sh(script: "echo '${commit}' | commitlint --config /tmp/commitlint-config/commitlint.config.js", returnStatus: true)
                             if (result != 0) {
                                 echo "Commit message failed: ${commit}"
                                 hasErrors = true
@@ -138,7 +130,7 @@ pipeline {
 }
 
 void updateGitHubStatus(String context, String state, String description, String commitSHA) {
-    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+    withCredentials([usernamePassword(credentialsId: GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
         echo "Updating GitHub status: context=${context}, state=${state}, description=${description}, commit=${commitSHA}"
         def payload = """
             {
@@ -149,13 +141,7 @@ void updateGitHubStatus(String context, String state, String description, String
             }
         """
         echo "Payload: ${payload}"
-        def response = sh(script: """
-            curl -H "Authorization: token ${GITHUB_TOKEN}" \
-                 -H "Content-Type: application/json" \
-                 -X POST \
-                 -d '${payload}' \
-                 ${env.GITHUB_API_URL}/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/statuses/${commitSHA}
-        """, returnStdout: true).trim()
+        def response = sh(script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' -H 'Content-Type: application/json' -X POST -d '${payload}' ${GITHUB_API_URL}/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/statuses/${commitSHA}", returnStdout: true).trim()
         echo "GitHub API response: ${response}"
         
         if (response.contains("error")) {
