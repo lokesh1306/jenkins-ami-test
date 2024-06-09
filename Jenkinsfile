@@ -46,7 +46,7 @@ pipeline {
                     echo 'Fetching base branch from original repository...'
                     withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDENTIALS_ID, usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         sh '''
-                            git remote add upstream https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}.git || true
+                            git remote add upstream https://$GITHUB_USERNAME:$GITHUB_TOKEN@github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME.git || true
                             git fetch upstream main
                         '''
                     }
@@ -99,7 +99,7 @@ pipeline {
                     sh 'git fetch origin +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}'
 
                     // Log the commits between the PR and the base branch
-                    def commits = sh(script: 'git log --pretty=format:"%s" upstream/main..HEAD', returnStdout: true).trim().split('\n')
+                    def commits = sh(script: 'git log --pretty=format:"%s" origin/PR-${env.CHANGE_ID}..origin/${env.CHANGE_TARGET}', returnStdout: true).trim().split('\n')
                     if (commits.size() == 1 && commits[0].isEmpty()) {
                         echo 'No new commits to check.'
                     } else {
