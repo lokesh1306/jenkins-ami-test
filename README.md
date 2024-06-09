@@ -12,7 +12,7 @@ Before getting started, ensure you have the following:
 
 ## Repository Structure
 
-The repository has the following structure:
+The repository hadds the following structure:
 ```
 ├── ami.pkr.hcl
 ├── certbot_initial.sh
