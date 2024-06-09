@@ -113,6 +113,7 @@ pipeline {
                             }
                         }
                         if (hasErrors) {
+                            updateGitHubStatus('conventional-commits', 'failure', 'Conventional Commits check failed', env.PR_COMMIT_SHA)
                             error('Conventional Commits check failed!')
                         }
                     }
