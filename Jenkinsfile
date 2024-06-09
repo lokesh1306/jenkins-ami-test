@@ -95,6 +95,10 @@ pipeline {
             steps {
                 script {
                     echo 'Checking Conventional Commits...'
+                    // Fetch the PR branch and base branch to ensure we have the latest changes
+                    sh 'git fetch origin +refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID}'
+
+                    // Log the commits between the PR and the base branch
                     def commits = sh(script: 'git log --pretty=format:"%s" upstream/main..HEAD', returnStdout: true).trim().split('\n')
                     if (commits.size() == 1 && commits[0].isEmpty()) {
                         echo 'No new commits to check.'

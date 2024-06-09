@@ -9,7 +9,7 @@ Before getting started, ensure you have the following:
 - AWS account with appropriate permissions
 - Packer installed on your local machine
 - AWS CLI configured with the necessary credentials
-
+ss
 ## Repository Structure
 
 The repository hadds the following structure:
